@@ -4,3 +4,12 @@
 
 # LangGraph
 .langgraph_api/
+# ENV files
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env.development
+.env.test
+.env.production
