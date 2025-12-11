@@ -1,4 +1,5 @@
-const API_BASE_URL = 'http://localhost:8001';
+// Use VITE_API_URL from environment (set during build), fallback to localhost for dev
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8001';
 
 /**
  * Check backend health status
