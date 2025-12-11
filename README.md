@@ -163,7 +163,3 @@ terraform destroy
 10. `compute_collateral_coverage_ratio` - Collateral assessment
 11. `classify_risk_category` - Risk classification
 12. `compute_total_risk_score` - Comprehensive score
-
-## License
-
-MIT
