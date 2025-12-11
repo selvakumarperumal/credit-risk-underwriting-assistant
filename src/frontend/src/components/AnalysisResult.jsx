@@ -21,10 +21,6 @@ export default function AnalysisResult({ result, isStreaming, streamContent }) {
         }
     };
 
-    const handleNewAnalysis = () => {
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-    };
-
     if (!content && !isStreaming) return null;
 
     return (
