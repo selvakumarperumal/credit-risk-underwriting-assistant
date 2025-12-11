@@ -105,12 +105,18 @@ This creates:
 
 ### Destroying Infrastructure
 
-To tear down all resources:
+**Step 1: Destroy main infrastructure (GitHub Actions)**
 1. Go to **GitHub → Actions → Terraform Destroy**
 2. Type `destroy` to confirm
 3. Click **Run workflow**
 
-> **Note:** The bootstrap resources (S3 state bucket, DynamoDB) are NOT destroyed. Delete them manually when completely done.
+**Step 2: Destroy bootstrap resources (Local)**
+```bash
+cd infra/bootstrap
+terraform destroy
+```
+
+> **Important:** Always destroy main infrastructure BEFORE bootstrap, otherwise Terraform state will be lost.
 
 ---
 
