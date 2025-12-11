@@ -1,0 +1,111 @@
+name: Deploy Backend
+
+on:
+  workflow_dispatch:
+
+env:
+  AWS_REGION: ap-south-1
+  PYTHON_VERSION: '3.12'
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: src/backend
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install uv
+        run: curl -LsSf https://astral.sh/uv/install.sh | sh
+
+      - name: Install dependencies
+        run: |
+          source $HOME/.local/bin/env
+          uv sync
+
+      - name: Verify imports
+        run: |
+          source $HOME/.local/bin/env
+          uv run python -c "from app.main import app; print('FastAPI app OK')"
+          uv run python -c "from lambda_handler import handler; print('Lambda handler OK')"
+
+  build:
+    name: Build Lambda Package
+    runs-on: ubuntu-latest
+    needs: test
+    defaults:
+      run:
+        working-directory: src/backend
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install uv
+        run: curl -LsSf https://astral.sh/uv/install.sh | sh
+
+      - name: Create deployment package
+        run: |
+          source $HOME/.local/bin/env
+          mkdir -p package
+          uv pip install --python ${{ env.PYTHON_VERSION }} -t package .
+          cp -r app package/
+          cp lambda_handler.py package/
+          cd package && zip -r ../../dist/lambda.zip . -x "*.pyc" -x "*__pycache__*" -x "*.dist-info/*"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: lambda-package
+          path: dist/lambda.zip
+          retention-days: 7
+
+  deploy:
+    name: Deploy to Lambda
+    runs-on: ubuntu-latest
+    needs: build
+    environment: production
+    
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: lambda-package
+          path: dist
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Deploy to Lambda
+        run: |
+          aws lambda update-function-code \
+            --function-name credit-risk-assistant-production \
+            --zip-file fileb://dist/lambda.zip
+
+      - name: Wait for update
+        run: |
+          aws lambda wait function-updated \
+            --function-name credit-risk-assistant-production
+
+      - name: Smoke test
+        run: |
+          API_URL=$(aws apigatewayv2 get-apis --query "Items[?Name=='credit-risk-api-production'].ApiEndpoint" --output text)
+          curl -f "${API_URL}/health" || echo "Health check endpoint not available yet"

@@ -1,0 +1,99 @@
+name: Terraform Destroy
+
+# ⚠️ DANGER: This workflow destroys ALL infrastructure
+# Only runs manually with explicit confirmation
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type "destroy" to confirm infrastructure teardown'
+        required: true
+        type: string
+      environment:
+        description: 'Environment to destroy'
+        required: true
+        default: 'production'
+        type: choice
+        options:
+          - production
+
+env:
+  AWS_REGION: ap-south-1
+  TF_VERSION: '1.6'
+
+jobs:
+  validate-confirmation:
+    name: Validate Confirmation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check confirmation input
+        if: ${{ github.event.inputs.confirm != 'destroy' }}
+        run: |
+          echo "❌ Confirmation failed!"
+          echo "You must type 'destroy' to confirm infrastructure teardown."
+          echo "Received: '${{ github.event.inputs.confirm }}'"
+          exit 1
+
+      - name: Confirmation accepted
+        run: |
+          echo "⚠️ DESTRUCTION CONFIRMED"
+          echo "Environment: ${{ github.event.inputs.environment }}"
+          echo "Initiated by: ${{ github.actor }}"
+          echo "Time: $(date -u)"
+
+  destroy:
+    name: Destroy Infrastructure
+    runs-on: ubuntu-latest
+    needs: validate-confirmation
+    environment: production
+    defaults:
+      run:
+        working-directory: infra
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Terraform Init
+        run: terraform init
+
+      - name: Terraform Plan Destroy
+        run: |
+          echo "## 🗑️ Resources to be destroyed:" >> $GITHUB_STEP_SUMMARY
+          terraform plan -destroy \
+            -var="gemini_api_key=${{ secrets.GEMINI_API_KEY }}" \
+            -var="gemini_model_name=${{ secrets.GEMINI_MODEL_NAME }}" \
+            -out=tfplan-destroy \
+            -no-color | tee plan-output.txt
+          
+          # Add plan to summary
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          grep -E "^  #|will be destroyed" plan-output.txt >> $GITHUB_STEP_SUMMARY || true
+          echo '```' >> $GITHUB_STEP_SUMMARY
+
+      - name: Terraform Destroy
+        run: |
+          terraform apply -auto-approve tfplan-destroy
+          echo "## ✅ Infrastructure Destroyed" >> $GITHUB_STEP_SUMMARY
+          echo "All resources have been successfully destroyed." >> $GITHUB_STEP_SUMMARY
+
+      - name: Cleanup Summary
+        if: always()
+        run: |
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "---" >> $GITHUB_STEP_SUMMARY
+          echo "**Workflow completed at:** $(date -u)" >> $GITHUB_STEP_SUMMARY
+          echo "**Triggered by:** ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY

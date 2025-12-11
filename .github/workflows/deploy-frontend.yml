@@ -1,0 +1,113 @@
+name: Deploy Frontend
+
+on:
+  workflow_dispatch:
+
+env:
+  AWS_REGION: ap-south-1
+  NODE_VERSION: '20'
+  # Resource names match Terraform naming patterns
+  API_NAME: credit-risk-api-production
+  BUCKET_PREFIX: credit-risk-assistant-frontend-production
+  CLOUDFRONT_COMMENT: "Credit Risk Assistant Frontend - production"
+
+jobs:
+  build-and-deploy:
+    name: Build and Deploy
+    runs-on: ubuntu-latest
+    environment: production
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Get infrastructure values from AWS
+        id: infra
+        run: |
+          # Get API Gateway URL by name
+          API_URL=$(aws apigatewayv2 get-apis \
+            --query "Items[?Name=='${{ env.API_NAME }}'].ApiEndpoint" \
+            --output text)
+          echo "api_url=$API_URL" >> $GITHUB_OUTPUT
+          
+          # Get S3 bucket name by prefix
+          BUCKET_NAME=$(aws s3api list-buckets \
+            --query "Buckets[?starts_with(Name, '${{ env.BUCKET_PREFIX }}')].Name" \
+            --output text)
+          echo "s3_bucket=$BUCKET_NAME" >> $GITHUB_OUTPUT
+          
+          # Get CloudFront distribution ID by comment
+          DIST_ID=$(aws cloudfront list-distributions \
+            --query "DistributionList.Items[?Comment=='${{ env.CLOUDFRONT_COMMENT }}'].Id" \
+            --output text)
+          echo "cloudfront_id=$DIST_ID" >> $GITHUB_OUTPUT
+          
+          # Get CloudFront domain
+          DOMAIN=$(aws cloudfront list-distributions \
+            --query "DistributionList.Items[?Comment=='${{ env.CLOUDFRONT_COMMENT }}'].DomainName" \
+            --output text)
+          echo "cloudfront_domain=$DOMAIN" >> $GITHUB_OUTPUT
+          
+          echo "📦 Infrastructure values:"
+          echo "   API URL: $API_URL"
+          echo "   S3 Bucket: $BUCKET_NAME"
+          echo "   CloudFront ID: $DIST_ID"
+          echo "   CloudFront Domain: $DOMAIN"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: src/frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: src/frontend
+        run: npm ci
+
+      - name: Lint
+        working-directory: src/frontend
+        run: npm run lint
+
+      - name: Build
+        working-directory: src/frontend
+        run: npm run build
+        env:
+          VITE_API_URL: ${{ steps.infra.outputs.api_url }}
+
+      - name: Upload to S3
+        run: |
+          # Upload static assets with long cache
+          aws s3 sync src/frontend/dist/ s3://${{ steps.infra.outputs.s3_bucket }} \
+            --delete \
+            --cache-control "public, max-age=31536000" \
+            --exclude "index.html" \
+            --exclude "*.json"
+          
+          # Upload index.html with no-cache
+          aws s3 cp src/frontend/dist/index.html \
+            s3://${{ steps.infra.outputs.s3_bucket }}/index.html \
+            --cache-control "no-cache, no-store, must-revalidate"
+
+      - name: Invalidate CloudFront cache
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id ${{ steps.infra.outputs.cloudfront_id }} \
+            --paths "/*"
+
+      - name: Deployment summary
+        run: |
+          echo "## 🚀 Frontend Deployed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Resource | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| **URL** | https://${{ steps.infra.outputs.cloudfront_domain }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **API** | ${{ steps.infra.outputs.api_url }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **S3** | ${{ steps.infra.outputs.s3_bucket }} |" >> $GITHUB_STEP_SUMMARY
