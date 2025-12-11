@@ -19,22 +19,17 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-
       - name: Install uv
-        run: curl -LsSf https://astral.sh/uv/install.sh | sh
+        uses: astral-sh/setup-uv@v7
+
+      - name: Set up Python
+        run: uv python install ${{ env.PYTHON_VERSION }}
 
       - name: Install dependencies
-        run: |
-          source $HOME/.local/bin/env
-          uv sync
+        run: uv sync
 
       - name: Verify imports
         run: |
-          source $HOME/.local/bin/env
           uv run python -c "from app.main import app; print('FastAPI app OK')"
           uv run python -c "from lambda_handler import handler; print('Lambda handler OK')"
 
@@ -50,17 +45,14 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-
       - name: Install uv
-        run: curl -LsSf https://astral.sh/uv/install.sh | sh
+        uses: astral-sh/setup-uv@v4
+
+      - name: Set up Python
+        run: uv python install ${{ env.PYTHON_VERSION }}
 
       - name: Create deployment package
         run: |
-          source $HOME/.local/bin/env
           mkdir -p package
           uv pip install --python ${{ env.PYTHON_VERSION }} -t package .
           cp -r app package/
