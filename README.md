@@ -49,11 +49,24 @@ curl -X POST http://localhost:8001/analyze \
 
 ### Prerequisites
 
-- AWS Account with IAM credentials
+- AWS Account with IAM credentials (configured locally via `aws configure`)
 - Gemini API Key from [aistudio.google.com](https://aistudio.google.com/app/apikey)
 - GitHub repository
+- Terraform CLI installed locally
 
-### Step 1: Add GitHub Secrets
+### Step 1: Bootstrap (One-Time Local Setup)
+
+This creates an S3 bucket and DynamoDB table for Terraform state management:
+
+```bash
+cd infra/bootstrap
+terraform init
+terraform apply
+```
+
+After bootstrap completes, uncomment the S3 backend block in `infra/main.tf`.
+
+### Step 2: Add GitHub Secrets
 
 Go to **GitHub → Settings → Secrets → Actions** and add:
 
@@ -64,7 +77,7 @@ Go to **GitHub → Settings → Secrets → Actions** and add:
 | `GEMINI_API_KEY` | Your Gemini API key |
 | `GEMINI_MODEL_NAME` | `gemini-2.0-flash` |
 
-### Step 2: Deploy Infrastructure (Terraform)
+### Step 3: Deploy Infrastructure (Terraform)
 
 1. Go to **GitHub → Actions → Terraform**
 2. Click **Run workflow** → Select `plan` → Run
@@ -78,17 +91,26 @@ This creates:
 - CloudFront CDN
 - Secrets Manager
 
-### Step 3: Deploy Backend
+### Step 4: Deploy Backend
 
 1. Go to **GitHub → Actions → Deploy Backend**
 2. Click **Run workflow**
 3. Wait for completion
 
-### Step 4: Deploy Frontend
+### Step 5: Deploy Frontend
 
 1. Go to **GitHub → Actions → Deploy Frontend**
 2. Click **Run workflow**
 3. Your app is live at the CloudFront URL!
+
+### Destroying Infrastructure
+
+To tear down all resources:
+1. Go to **GitHub → Actions → Terraform Destroy**
+2. Type `destroy` to confirm
+3. Click **Run workflow**
+
+> **Note:** The bootstrap resources (S3 state bucket, DynamoDB) are NOT destroyed. Delete them manually when completely done.
 
 ---
 

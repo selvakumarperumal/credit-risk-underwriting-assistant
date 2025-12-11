@@ -40,26 +40,20 @@ terraform {
   }
 
   # ---------------------------------------------------------------------------
-  # OPTIONAL: S3 BACKEND FOR STATE STORAGE
+  # S3 BACKEND FOR STATE STORAGE
   # ---------------------------------------------------------------------------
-  # Uncomment this block to store Terraform state remotely in S3.
-  # Benefits:
-  # - Team collaboration: Multiple developers can work on the same infra
-  # - State locking: Prevents concurrent modifications (via DynamoDB)
-  # - Versioning: S3 versioning provides state history
-  # - Security: State is encrypted at rest
+  # PREREQUISITE: Run the bootstrap first!
+  #   cd infra/bootstrap && terraform init && terraform apply
   #
-  # Prerequisites:
-  # 1. Create an S3 bucket: aws s3 mb s3://your-terraform-state-bucket
-  # 2. Create DynamoDB table for locking with 'LockID' as partition key
+  # Then uncomment this block and run: terraform init -migrate-state
   # ---------------------------------------------------------------------------
-  # backend "s3" {
-  #   bucket         = "your-terraform-state-bucket"
-  #   key            = "credit-risk-assistant/terraform.tfstate"
-  #   region         = "ap-south-1"
-  #   encrypt        = true
-  #   dynamodb_table = "terraform-locks"
-  # }
+  backend "s3" {
+    bucket         = "credit-risk-tf-state-selva"
+    key            = "credit-risk-assistant/terraform.tfstate"
+    region         = "ap-south-1"
+    encrypt        = true
+    dynamodb_table = "terraform-locks"
+  }
 }
 
 # -----------------------------------------------------------------------------
