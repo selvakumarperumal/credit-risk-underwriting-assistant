@@ -37,9 +37,6 @@ jobs:
     name: Build Lambda Package
     runs-on: ubuntu-latest
     needs: test
-    defaults:
-      run:
-        working-directory: src/backend
     
     steps:
       - name: Checkout code
@@ -53,11 +50,21 @@ jobs:
 
       - name: Create deployment package
         run: |
-          mkdir -p package
-          uv pip install --target package .
-          cp -r app package/
-          cp lambda_handler.py package/
-          cd package && zip -r ../../dist/lambda.zip . -x "*.pyc" -x "*__pycache__*" -x "*.dist-info/*"
+          # Create package directory at root level (outside src/backend)
+          mkdir -p lambda_package
+          
+          # Install dependencies to lambda_package
+          cd src/backend
+          uv pip install --target ../../lambda_package .
+          
+          # Copy application files
+          cp -r app ../../lambda_package/
+          cp lambda_handler.py ../../lambda_package/
+          
+          # Create zip
+          cd ../../lambda_package
+          mkdir -p ../dist
+          zip -r ../dist/lambda.zip . -x "*.pyc" -x "*__pycache__*" -x "*.dist-info/*"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
