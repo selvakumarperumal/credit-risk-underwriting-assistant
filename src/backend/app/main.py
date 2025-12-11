@@ -183,10 +183,11 @@ app = FastAPI(
 )
 
 # Add CORS middleware for frontend
+# Allow all origins since API Gateway also handles CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
-    allow_credentials=True,
+    allow_origins=["*"],  # Allow all origins (API Gateway also configures CORS)
+    allow_credentials=False,  # Must be False when using allow_origins=["*"]
     allow_methods=["*"],
     allow_headers=["*"],
 )
